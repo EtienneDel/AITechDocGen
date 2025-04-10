@@ -1,0 +1,25 @@
+name: 'TypeScript Documentation Generator'
+description: 'Automatically generates documentation for TypeScript codebases'
+author: 'EtienneDel'
+
+inputs:
+  source-dir:
+    description: 'Directory containing TypeScript source files'
+    required: true
+    default: 'src'
+  output-dir:
+    description: 'Directory where documentation will be generated'
+    required: false
+    default: 'docs'
+  github-token:
+    description: 'GitHub token for API access to get changed files'
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
+
+branding:
+  icon: 'book'
+  color: 'green'
