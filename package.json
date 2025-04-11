@@ -1,6 +1,6 @@
 {
   "name": "typescript-docs-generator-action",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "GitHub Action to generate TypeScript documentation",
   "main": "dist/index.js",
   "scripts": {
