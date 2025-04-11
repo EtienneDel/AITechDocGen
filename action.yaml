@@ -3,18 +3,26 @@ description: 'Automatically generates documentation for TypeScript codebases'
 author: 'EtienneDel'
 
 inputs:
-  source-dir:
-    description: 'Directory containing TypeScript source files'
+  claude_api_key:
+    description: 'Claude API key for generating documentation'
     required: true
-    default: 'src'
-  output-dir:
-    description: 'Directory where documentation will be generated'
-    required: false
-    default: 'docs'
-  github-token:
-    description: 'GitHub token for API access to get changed files'
-    required: false
+  github_token:
+    description: 'GitHub token for accessing PR files and creating commits'
+    required: true
     default: ${{ github.token }}
+  file_extensions:
+    description: 'Comma-separated list of file extensions to process (e.g., .ts,.tsx)'
+    required: false
+    default: '.ts,.tsx'
+  pr_title_prefix:
+    description: 'Prefix for the commit message'
+    required: false
+    default: 'docs: '
+outputs:
+  processed_files:
+    description: 'Number of files processed'
+  updated_files:
+    description: 'Number of files that were updated with documentation'
 
 runs:
   using: 'node20'

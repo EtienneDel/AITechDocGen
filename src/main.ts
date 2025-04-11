@@ -1,16 +1,69 @@
 import * as core from "@actions/core";
+import github from "@actions/github";
+import { getChangedFilesInPR, updatePRWithDocumentation } from "./github";
+import { generateDocsForFunctionBatch } from "./claude";
+import { FunctionInfo } from "./lib/types";
+import { extractFunctions } from "./typescript";
 
 async function run(): Promise<void> {
   try {
-    // Get inputs from the action
-    const sourceDir: string = core.getInput("source-dir");
+    const claudeApiKey = core.getInput("claude_api_key", { required: true });
+    const githubToken = core.getInput("github_token", { required: true });
+    const octokit = github.getOctokit(githubToken);
 
-    // Log action start
+    // Get changed files in the PR
+    const changedFiles = await getChangedFilesInPR(octokit, github.context);
+
+    if (changedFiles.length === 0) {
+      core.notice("No TypeScript files were changed in this PR");
+      core.setOutput("processed_files", "0");
+      core.setOutput("updated_files", "0");
+      return;
+    }
+
     core.info(
-      `Starting documentation generation for the following directory: ${sourceDir}`,
+      `Found ${changedFiles.length} TypeScript files to process: ${changedFiles.join(", ")}`,
     );
 
-    core.info("Documentation generated successfully");
+    // Extract functions from the changed files
+    const functions = extractFunctions(changedFiles);
+    core.info(
+      `Extracted ${functions.length} functions from ${changedFiles.length} files`,
+    );
+
+    if (functions.length === 0) {
+      core.notice("No functions found in the changed files");
+      core.setOutput("processed_files", changedFiles.length.toString());
+      core.setOutput("updated_files", "0");
+      return;
+    }
+
+    // Generate documentation
+    const updatedFunctions = await generateDocsForFunctionBatch(
+      functions,
+      claudeApiKey,
+    );
+
+    // Group functions by file
+    const functionsByFile: Record<string, FunctionInfo[]> = {};
+    for (const func of updatedFunctions) {
+      if (!functionsByFile[func.filePath]) {
+        functionsByFile[func.filePath] = [];
+      }
+      functionsByFile[func.filePath].push(func);
+    }
+
+    // Update PR with documentation
+    const { processedFiles, updatedFiles } = await updatePRWithDocumentation(
+      updatedFunctions,
+      functionsByFile,
+    );
+
+    // Set outputs
+    core.setOutput("processed_files", processedFiles.toString());
+    core.setOutput("updated_files", updatedFiles.toString());
+
+    core.info(`Successfully added documentation to ${updatedFiles} files`);
   } catch (error) {
     // Handle errors
     if (error instanceof Error) {
