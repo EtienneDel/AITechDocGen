@@ -1,7 +1,7 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
-import { FunctionInfo, GitHubPrOptions } from "../lib/types";
-import { prepareFileUpdates } from "../generate-docs";
+import { FunctionInfo } from "../lib/types";
+import { prepareFileUpdates } from "./utils";
 
 /**
  * Gets the list of changed TypeScript files in the current PR
@@ -111,110 +111,4 @@ export async function updatePRWithDocumentation(
     processedFiles: fileUpdates.length,
     updatedFiles: updatedFilesCount,
   };
-}
-
-/**
- * Creates a GitHub pull request with the updated documentation using @actions/github
- */
-export async function createGitHubPullRequest(
-  updatedFunctions: FunctionInfo[],
-  functionsByFile: Record<string, FunctionInfo[]>,
-  options: GitHubPrOptions,
-): Promise<void> {
-  const { token, baseBranch = "main", prTitle, prBody } = options;
-
-  // Create Octokit instance
-  const octokit = github.getOctokit(token);
-  // Get repository information from the GitHub Actions context
-  const { owner, repo } = github.context.repo;
-
-  // Create a unique branch name based on timestamp
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const branchName = `docs/add-tsdoc-${timestamp}`;
-
-  try {
-    core.info(`Creating branch ${branchName} in ${owner}/${repo}`);
-
-    // 1. Get the reference to the base branch
-    const { data: reference } = await octokit.rest.git.getRef({
-      owner,
-      repo,
-      ref: `heads/${baseBranch}`,
-    });
-
-    const baseCommitSha = reference.object.sha;
-
-    // 2. Create a new branch
-    await octokit.rest.git.createRef({
-      owner,
-      repo,
-      ref: `refs/heads/${branchName}`,
-      sha: baseCommitSha,
-    });
-
-    core.info(`Created branch ${branchName}`);
-
-    // 3. Generate updated file contents
-    const fileUpdates = await prepareFileUpdates(
-      updatedFunctions,
-      functionsByFile,
-    );
-    core.info(`Prepared updates for ${fileUpdates.length} files`);
-
-    // 4. Create commits with file changes
-    for (const fileUpdate of fileUpdates) {
-      let fileSha;
-
-      try {
-        // Try to get the current file (if it exists)
-        const { data: fileData } = await octokit.rest.repos.getContent({
-          owner,
-          repo,
-          path: fileUpdate.path,
-          ref: branchName,
-        });
-
-        if (!Array.isArray(fileData)) {
-          fileSha = fileData.sha;
-        }
-      } catch (error) {
-        // File doesn't exist yet, which is fine
-        core.debug(
-          `File ${fileUpdate.path} doesn't exist yet, creating new file`,
-        );
-      }
-
-      // Create or update the file
-      await octokit.rest.repos.createOrUpdateFileContents({
-        owner,
-        repo,
-        path: fileUpdate.path,
-        message: `Add TsDoc comments to ${fileUpdate.path}`,
-        content: Buffer.from(fileUpdate.content).toString("base64"),
-        branch: branchName,
-        ...(fileSha ? { sha: fileSha } : {}),
-      });
-
-      core.info(`Updated file ${fileUpdate.path}`);
-    }
-
-    // 5. Create a pull request
-    const { data: pullRequest } = await octokit.rest.pulls.create({
-      owner,
-      repo,
-      title: prTitle || "Add TsDoc Comments",
-      body:
-        prBody ||
-        "This PR adds TsDoc comments to functions using AI-generated documentation.",
-      head: branchName,
-      base: baseBranch,
-    });
-
-    core.info(`Successfully created pull request: ${pullRequest.html_url}`);
-    core.setOutput("pull_request_url", pullRequest.html_url);
-    core.setOutput("pull_request_number", pullRequest.number.toString());
-  } catch (error) {
-    core.setFailed(`Error creating pull request: ${error}`);
-    throw error;
-  }
 }
