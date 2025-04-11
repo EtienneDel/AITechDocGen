@@ -8,36 +8,46 @@ export async function generateDocsForFunctionBatch(
   functions: FunctionInfo[],
   apiKey: string,
 ): Promise<FunctionInfo[]> {
-  const prompt = createPromptForFunctions(functions);
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-3-5-sonnet-20240620",
-      max_tokens: 4000,
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Claude API error: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  const claudeResponse = (await response.json()) as ClaudeResponse;
-  const responseText = claudeResponse.content[0].text;
-
+  // const prompt = createPromptForFunctions(functions);
+  //
+  // const response = await fetch("https://api.anthropic.com/v1/messages", {
+  //   method: "POST",
+  //   headers: {
+  //     "Content-Type": "application/json",
+  //     "x-api-key": apiKey,
+  //     "anthropic-version": "2023-06-01",
+  //   },
+  //   body: JSON.stringify({
+  //     model: "claude-3-5-sonnet-20240620",
+  //     max_tokens: 4000,
+  //     messages: [
+  //       {
+  //         role: "user",
+  //         content: prompt,
+  //       },
+  //     ],
+  //   }),
+  // });
+  //
+  // if (!response.ok) {
+  //   throw new Error(
+  //     `Claude API error: ${response.status} ${response.statusText}`,
+  //   );
+  // }
+  //
+  // const claudeResponse = (await response.json()) as ClaudeResponse;
+  // const responseText = claudeResponse.content[0].text;
+  const responseText = `FUNCTION: signUp2
+\`\`\`
+/**
+ * Description
+ *
+ * @param paramName Description of parameter
+ * @returns Description of return value
+ * @example
+ * // Example code
+ */
+\`\`\``;
   // Extract the TsDoc comments for each function
   return extractTsDocsFromResponse(responseText, functions);
 }

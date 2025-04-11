@@ -1,6 +1,7 @@
 import core from "@actions/core";
 import github from "@actions/github";
 import { FunctionInfo, GitHubPrOptions } from "../lib/types";
+import { prepareFileUpdates } from "../generate-docs";
 
 /**
  * Gets the list of changed TypeScript files in the current PR

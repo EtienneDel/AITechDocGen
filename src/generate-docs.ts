@@ -165,7 +165,7 @@ async function writeUpdatedFiles(
 /**
  * Prepares file updates for GitHub PR
  */
-async function prepareFileUpdates(
+export async function prepareFileUpdates(
   updatedFunctions: FunctionInfo[],
   functionsByFile: Record<string, FunctionInfo[]>,
 ): Promise<Array<{ path: string; content: string }>> {
