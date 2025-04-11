@@ -1,19 +1,25 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
-import { FunctionInfo } from "../lib/types";
+import { FunctionsByFile } from "../lib/types";
 import { prepareFileUpdates } from "./utils";
 
+export const getInputFileExtensions = () =>
+  core
+    .getInput("file_extensions", { required: false })
+    ?.split(",")
+    .map((ext) => ext.trim())
+    .filter((ext) => !!ext?.length && ext.match(/^\.\w+$/gm)) || [];
 /**
  * Gets the list of changed TypeScript files in the current PR
  */
-export async function getChangedFilesInPR(
+export const getChangedFilesInPR = async (
   octokit: ReturnType<typeof github.getOctokit>,
   context: typeof github.context,
-): Promise<string[]> {
+): Promise<string[]> => {
   const { owner, repo } = context.repo;
-  const pull_number = context.payload.pull_request?.number;
+  const pullNumber = context.payload.pull_request?.number;
 
-  if (!pull_number) {
+  if (!pullNumber) {
     core.setFailed("This action must be run in a pull request context");
     return [];
   }
@@ -22,43 +28,34 @@ export async function getChangedFilesInPR(
   const response = await octokit.rest.pulls.listFiles({
     owner,
     repo,
-    pull_number,
+    pull_number: pullNumber,
   });
 
-  // Get file extensions to filter by
-  const fileExtensions = core
-    .getInput("file_extensions", { required: false })
-    .split(",")
-    .map((ext) => ext.trim())
-    .filter(Boolean);
+  if (!response?.data?.length) return [];
 
   // Filter for TypeScript files that were added or modified (not deleted)
   return response.data
     .filter(
       (file) =>
         (file.status === "added" || file.status === "modified") &&
-        fileExtensions.some((ext) => file.filename.endsWith(ext)),
+        getInputFileExtensions().some((ext) => file.filename.endsWith(ext)),
     )
     .map((file) => file.filename);
-}
+};
 
 /**
  * Updates documentation in a PR directly with a commit
  */
-export async function updatePRWithDocumentation(
-  updatedFunctions: FunctionInfo[],
-  functionsByFile: Record<string, FunctionInfo[]>,
-): Promise<{ processedFiles: number; updatedFiles: number }> {
-  const token = core.getInput("github_token", { required: true });
-  const octokit = github.getOctokit(token);
-  const context = github.context;
+export const updatePRWithDocumentation = async (
+  octokit: ReturnType<typeof github.getOctokit>,
+  context: typeof github.context,
+  functionsByFile: FunctionsByFile[],
+): Promise<{ processedFiles: number; updatedFiles: number }> => {
   const { owner, repo } = context.repo;
 
   // Prepare file updates
-  const fileUpdates = await prepareFileUpdates(
-    updatedFunctions,
-    functionsByFile,
-  );
+  const fileUpdates = await prepareFileUpdates(functionsByFile);
+
   core.info(`Prepared updates for ${fileUpdates.length} files`);
 
   let updatedFilesCount = 0;
@@ -111,4 +108,4 @@ export async function updatePRWithDocumentation(
     processedFiles: fileUpdates.length,
     updatedFiles: updatedFilesCount,
   };
-}
+};

@@ -1,3 +1,5 @@
+import ts from "typescript";
+
 interface FunctionParameter {
   name: string;
   type: string;
@@ -19,6 +21,11 @@ export interface FunctionInfo {
   body: string;
 }
 
+export interface FunctionsByFile {
+  filename: string;
+  functions: FunctionInfo[];
+}
+
 export interface ClaudeResponse {
   content: Array<{
     type: string;
@@ -26,9 +33,8 @@ export interface ClaudeResponse {
   }>;
 }
 
-export interface GitHubPrOptions {
-  token: string;
-  baseBranch?: string;
-  prTitle?: string;
-  prBody?: string;
-}
+export type TsNode =
+  | ts.FunctionDeclaration
+  | ts.MethodDeclaration
+  | ts.ArrowFunction
+  | ts.FunctionExpression;

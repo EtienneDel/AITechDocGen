@@ -1,4 +1,4 @@
-import { FunctionInfo } from "../lib/types";
+import { FunctionsByFile } from "../lib/types";
 import * as fs from "node:fs";
 import path from "node:path";
 
@@ -6,28 +6,18 @@ import path from "node:path";
  * Prepares file updates for GitHub PR
  */
 export async function prepareFileUpdates(
-  updatedFunctions: FunctionInfo[],
-  functionsByFile: Record<string, FunctionInfo[]>,
-): Promise<Array<{ path: string; content: string }>> {
+  functionsByFile: FunctionsByFile[],
+): Promise<{ path: string; content: string }[]> {
   const fileUpdates = [];
 
-  // Process each file
-  for (const filePath of Object.keys(functionsByFile)) {
-    // Read the original file
-    const fileContent = fs.readFileSync(filePath, "utf8");
+  for (const file of functionsByFile) {
+    file.functions.sort((a, b) => b.startLine - a.startLine);
+
+    const fileContent = fs.readFileSync(file.filename, "utf8");
     const lines = fileContent.split("\n");
 
-    // Get functions for this file
-    const fileFunctions = updatedFunctions.filter(
-      (f) => f.filePath === filePath,
-    );
-
-    // Sort functions by start line in descending order to avoid position shifts
-    fileFunctions.sort((a, b) => b.startLine - a.startLine);
-
-    // Insert documentation for each function
-    for (const func of fileFunctions) {
-      if (!func.documentation) continue;
+    for (const func of file.functions) {
+      if (!func.documentation?.length) continue;
 
       // Calculate the position where the documentation should be inserted
       const insertPosition = getInsertPosition(lines, func.startLine);
@@ -41,7 +31,7 @@ export async function prepareFileUpdates(
     }
 
     // Convert relative path for GitHub
-    const relativePath = path.relative(process.cwd(), filePath);
+    const relativePath = path.relative(process.cwd(), file.filename);
 
     fileUpdates.push({
       path: relativePath,

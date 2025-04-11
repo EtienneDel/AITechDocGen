@@ -1,24 +1,89 @@
-import * as ts from "typescript";
-import { FunctionInfo } from "../lib/types";
+import ts from "typescript";
+import { FunctionInfo, FunctionsByFile, TsNode } from "../lib/types";
+import {
+  getFunctionDocumentation,
+  getFunctionParameters,
+  getFunctionReturnType,
+} from "./utils";
+import * as core from "@actions/core";
+
+const processFunction = (
+  node: TsNode,
+  sourceFile: ts.SourceFile,
+  checker: ts.TypeChecker,
+  variableName?: string,
+): FunctionInfo => ({
+  name: variableName || node.name?.getText(sourceFile) || "<anonymous>",
+  filePath: sourceFile.fileName,
+  startLine: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+    .line,
+  endLine: sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line,
+  parameters: getFunctionParameters(node.parameters, sourceFile, checker),
+  returnType: getFunctionReturnType(node, sourceFile, checker),
+  documentation: getFunctionDocumentation(node, sourceFile),
+  isAsync:
+    node.modifiers?.some(({ kind }) => kind === ts.SyntaxKind.AsyncKeyword) ??
+    false,
+  isExported:
+    node.modifiers?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword) ??
+    false,
+  isGenerator: !!node.asteriskToken,
+  body: node.body?.getText(sourceFile) || "",
+});
+
+// Helper function to visit nodes recursively
+const visitNode = (
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  checker: ts.TypeChecker,
+  functions: FunctionInfo[],
+): void => {
+  // Function and Method declarations
+  if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) {
+    functions.push(processFunction(node, sourceFile, checker));
+  }
+  // Arrow functions and function expressions with variable declarations
+  else if (ts.isVariableStatement(node)) {
+    for (const declaration of node.declarationList.declarations) {
+      if (
+        !declaration.initializer ||
+        (!ts.isArrowFunction(declaration.initializer) &&
+          !ts.isFunctionExpression(declaration.initializer))
+      ) {
+        continue;
+      }
+
+      functions.push(
+        processFunction(
+          declaration.initializer,
+          sourceFile,
+          checker,
+          declaration.name.getText(sourceFile),
+        ),
+      );
+    }
+  }
+  // Recursively visit all children
+  ts.forEachChild(node, (childNode) => {
+    visitNode(childNode, sourceFile, checker, functions);
+  });
+};
 
 /**
  * Extracts all functions from a list of TypeScript files
  *
  * @param fileNames Array of file paths to TypeScript files
- * @param options Optional TypeScript compiler options
  * @returns Array of extracted function information
  */
-export function extractFunctions(
-  fileNames: string[],
-  options: ts.CompilerOptions = {
+export function extractFunctions(fileNames: string[]): FunctionsByFile[] {
+  // Create a Program from the files
+  const program = ts.createProgram(fileNames, {
     target: ts.ScriptTarget.ES2020,
     module: ts.ModuleKind.CommonJS,
-  },
-): FunctionInfo[] {
-  // Create a Program from the files
-  const program = ts.createProgram(fileNames, options);
+  });
+
   const checker = program.getTypeChecker();
-  const functions: FunctionInfo[] = [];
+  const functionsByFile: FunctionsByFile[] = [];
 
   // Process each source file
   for (const sourceFile of program.getSourceFiles()) {
@@ -30,167 +95,19 @@ export function extractFunctions(
       continue;
     }
 
+    let functions: FunctionInfo[] = [];
+
     // Visit each node in the source file
     ts.forEachChild(sourceFile, (node) => {
-      visitNode(node, sourceFile);
-    });
-  }
-
-  return functions;
-
-  // Helper function to visit nodes recursively
-  function visitNode(node: ts.Node, sourceFile: ts.SourceFile): void {
-    // Function declarations
-    if (ts.isFunctionDeclaration(node)) {
-      processFunctionLike(node, sourceFile);
-    }
-    // Method declarations in classes/interfaces
-    else if (ts.isMethodDeclaration(node)) {
-      processFunctionLike(node, sourceFile);
-    }
-    // Arrow functions and function expressions with variable declarations
-    else if (ts.isVariableStatement(node)) {
-      node.declarationList.declarations.forEach((declaration) => {
-        if (declaration.initializer) {
-          if (
-            ts.isArrowFunction(declaration.initializer) ||
-            ts.isFunctionExpression(declaration.initializer)
-          ) {
-            const name = declaration.name.getText(sourceFile);
-            processFunctionLike(declaration.initializer, sourceFile, name);
-          }
-        }
-      });
-    }
-    // Recursively visit all children
-    ts.forEachChild(node, (childNode) => {
-      visitNode(childNode, sourceFile);
-    });
-  }
-
-  // Process function-like declarations and expressions
-  function processFunctionLike(
-    node:
-      | ts.FunctionDeclaration
-      | ts.MethodDeclaration
-      | ts.ArrowFunction
-      | ts.FunctionExpression,
-    sourceFile: ts.SourceFile,
-    variableName?: string,
-  ): void {
-    // Get function name
-    let name: string;
-    if ("name" in node && node.name) {
-      name = node.name.getText(sourceFile);
-    } else if (variableName) {
-      name = variableName;
-    } else {
-      name = "<anonymous>";
-    }
-
-    // Get line numbers
-    const { line: startLine } = sourceFile.getLineAndCharacterOfPosition(
-      node.getStart(sourceFile),
-    );
-    const { line: endLine } = sourceFile.getLineAndCharacterOfPosition(
-      node.getEnd(),
-    );
-
-    // Get parameters
-    const parameters = node.parameters.map((param) => {
-      const paramName = param.name.getText(sourceFile);
-      const paramType = param.type
-        ? param.type.getText(sourceFile)
-        : inferType(param, checker);
-
-      const optional = !!param.questionToken;
-
-      let defaultValue: string | undefined;
-      if (param.initializer) {
-        defaultValue = param.initializer.getText(sourceFile);
-      }
-
-      return {
-        name: paramName,
-        type: paramType,
-        optional,
-        defaultValue,
-      };
+      visitNode(node, sourceFile, checker, functions);
     });
 
-    // Get return type
-    let returnType: string;
-    if ("type" in node && node.type) {
-      returnType = node.type.getText(sourceFile);
-    } else {
-      // Try to infer return type from the signature
-      const signature = checker.getSignatureFromDeclaration(node as any);
-      returnType = signature
-        ? checker.typeToString(checker.getReturnTypeOfSignature(signature))
-        : "any";
-    }
-
-    // Get documentation from JSDoc comments
-    let documentation = "";
-    const docTags = ts.getJSDocTags(node);
-    const commentRanges = ts.getLeadingCommentRanges(
-      sourceFile.text,
-      node.getFullStart(),
+    core.info(
+      `Extracted ${functions.length} functions from ${sourceFile.fileName}`,
     );
 
-    if (commentRanges && commentRanges.length > 0) {
-      const commentStrings = commentRanges.map((range) =>
-        sourceFile.text.substring(range.pos, range.end),
-      );
-      documentation = commentStrings.join("\n");
-    }
-
-    // Check if function is async
-    const isAsync =
-      node.modifiers?.some(
-        (modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword,
-      ) ?? false;
-
-    // Check if function is exported
-    const isExported =
-      node.modifiers?.some(
-        (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-      ) ?? false;
-
-    // Check if function is a generator
-    const isGenerator = !!node.asteriskToken;
-
-    // Get function body text
-    const body = node.body ? node.body.getText(sourceFile) : "";
-
-    // Create function info object
-    const functionInfo: FunctionInfo = {
-      name,
-      filePath: sourceFile.fileName,
-      startLine,
-      endLine,
-      parameters,
-      returnType,
-      documentation,
-      isAsync,
-      isExported,
-      isGenerator,
-      body,
-    };
-
-    functions.push(functionInfo);
+    functionsByFile.push({ filename: sourceFile.fileName, functions });
   }
 
-  // Helper to infer types when not explicitly specified
-  function inferType(
-    node: ts.ParameterDeclaration,
-    checker: ts.TypeChecker,
-  ): string {
-    try {
-      const type = checker.getTypeAtLocation(node);
-      return checker.typeToString(type);
-    } catch (e) {
-      return "any";
-    }
-  }
+  return functionsByFile;
 }

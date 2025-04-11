@@ -13,6 +13,16 @@ export default defineConfig([
     files: ["**/*.{js,mjs,cjs,ts}"],
     languageOptions: { globals: globals.node },
   },
+  {
+    overrides: [
+      {
+        files: ["__tests__/**/*"],
+        env: {
+          jest: true,
+        },
+      },
+    ],
+  },
   tseslint.configs.strict,
   tseslint.configs.stylistic,
 ]);

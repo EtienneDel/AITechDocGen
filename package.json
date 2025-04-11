@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc && ncc build lib/main.js -o dist",
-    "test": "jest",
+    "test": "jest src/__tests__/**/*.test.ts --coverage --coverageDirectory=coverage",
     "lint": "eslint src/**/*.ts"
   },
   "keywords": [
