@@ -74,8 +74,8 @@ export async function updatePRWithDocumentation(
         ref: context.payload.pull_request?.head.ref,
       });
 
-      if (Array.isArray(fileData)) {
-        core.warning(`${fileUpdate.path} is a directory, skipping`);
+      if (Array.isArray(fileData) || fileData.type !== "file") {
+        core.warning(`${fileUpdate.path} is not a file, skipping`);
         continue;
       }
 
@@ -103,7 +103,7 @@ export async function updatePRWithDocumentation(
       core.info(`Updated file ${fileUpdate.path} with documentation`);
       updatedFilesCount++;
     } catch (error) {
-      core.warning(`Error updating ${fileUpdate.path}: ${error.message}`);
+      core.warning(`Error updating ${fileUpdate.path}: ${error}`);
     }
   }
 
@@ -125,10 +125,8 @@ export async function createGitHubPullRequest(
 
   // Create Octokit instance
   const octokit = github.getOctokit(token);
-  const context = github.context;
-
   // Get repository information from the GitHub Actions context
-  const { owner, repo } = context.repo;
+  const { owner, repo } = github.context.repo;
 
   // Create a unique branch name based on timestamp
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -216,7 +214,7 @@ export async function createGitHubPullRequest(
     core.setOutput("pull_request_url", pullRequest.html_url);
     core.setOutput("pull_request_number", pullRequest.number.toString());
   } catch (error) {
-    core.setFailed(`Error creating pull request: ${error.message}`);
+    core.setFailed(`Error creating pull request: ${error}`);
     throw error;
   }
 }
