@@ -1,5 +1,5 @@
 import * as core from "@actions/core";
-import github from "@actions/github";
+import * as github from "@actions/github";
 import { getChangedFilesInPR, updatePRWithDocumentation } from "./github";
 import { generateDocsForFunctionBatch } from "./claude";
 import { FunctionInfo } from "./lib/types";

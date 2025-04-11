@@ -1,5 +1,5 @@
 import core from "@actions/core";
-import github from "@actions/github";
+import * as github from "@actions/github";
 import { FunctionInfo, GitHubPrOptions } from "../lib/types";
 import { prepareFileUpdates } from "../generate-docs";
 
