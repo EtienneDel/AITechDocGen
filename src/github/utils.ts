@@ -1,13 +1,14 @@
-import { FunctionsByFile } from "../lib/types";
+import { FileUpdates, FunctionsByFile } from "../lib/types";
 import * as fs from "node:fs";
 import path from "node:path";
+import * as core from "@actions/core";
 
 /**
  * Prepares file updates for GitHub PR
  */
-export async function prepareFileUpdates(
+export const prepareFileUpdates = (
   functionsByFile: FunctionsByFile[],
-): Promise<{ path: string; content: string }[]> {
+): FileUpdates[] => {
   const fileUpdates = [];
 
   for (const file of functionsByFile) {
@@ -16,18 +17,38 @@ export async function prepareFileUpdates(
     const fileContent = fs.readFileSync(file.filename, "utf8");
     const lines = fileContent.split("\n");
 
-    for (const func of file.functions) {
-      if (!func.documentation?.length) continue;
+    for (const [index, func] of file.functions.entries()) {
+      if (!func.documentation.length) continue;
 
-      // Calculate the position where the documentation should be inserted
-      const insertPosition = getInsertPosition(lines, func.startLine);
+      const previousFunction =
+        index + 1 <= file.functions.length - 1
+          ? file.functions[index + 1]
+          : undefined;
 
       // Format the documentation with proper indentation
       const indentation = getIndentation(lines[func.startLine]);
       const formattedDoc = formatDocumentation(func.documentation, indentation);
 
       // Insert the documentation
-      lines.splice(insertPosition, 0, formattedDoc);
+      if (previousFunction) {
+        const spacingLines = getSpacingLines(
+          lines.slice(previousFunction.endLine + 1),
+        );
+        lines.splice(
+          previousFunction.endLine + 1 + spacingLines,
+          lines.slice(
+            previousFunction.endLine + 1 + spacingLines,
+            func.startLine,
+          ).length,
+          formattedDoc,
+        );
+      } else {
+        lines.splice(
+          func.startLine,
+          lines.slice(0, func.startLine).length,
+          formattedDoc,
+        );
+      }
     }
 
     // Convert relative path for GitHub
@@ -39,68 +60,37 @@ export async function prepareFileUpdates(
     });
   }
 
+  core.info(`Prepared updates for ${fileUpdates.length.toString()} files`);
+
   return fileUpdates;
-}
-
-/**
- * Determines the correct position to insert documentation
- */
-function getInsertPosition(lines: string[], functionStartLine: number): number {
-  // Check previous lines for existing comments or decorators
-  let currentLine = functionStartLine - 1;
-
-  while (currentLine >= 0) {
-    const line = lines[currentLine].trim();
-
-    // If we find a non-empty line that isn't a comment or decorator, stop
-    if (
-      line &&
-      !line.startsWith("//") &&
-      !line.startsWith("/*") &&
-      !line.startsWith("*") &&
-      !line.startsWith("@")
-    ) {
-      break;
-    }
-
-    // Skip existing TSDoc comments
-    if (line.startsWith("/**")) {
-      // Skip the entire comment block
-      while (currentLine >= 0 && !lines[currentLine].includes("*/")) {
-        currentLine--;
-      }
-      if (currentLine >= 0) {
-        currentLine--; // Skip the closing */
-      }
-      continue;
-    }
-
-    currentLine--;
-  }
-
-  return currentLine + 1;
-}
+};
 
 /**
  * Gets the indentation from a line of code
  */
-function getIndentation(line: string): string {
-  const match = line.match(/^(\s*)/);
+export const getIndentation = (line: string): string => {
+  const match = /^(\s*)/.exec(line);
   return match ? match[1] : "";
-}
+};
 
 /**
  * Formats documentation with proper indentation
  */
-function formatDocumentation(
+export const formatDocumentation = (
   documentation: string,
   indentation: string,
-): string {
+): string => {
   return documentation
     .split("\n")
-    .map((line, index) => {
-      if (index === 0) return indentation + line;
-      return indentation + line;
-    })
+    .map((line) => (line.trim().length ? indentation + line.trim() : line))
     .join("\n");
-}
+};
+
+export const getSpacingLines = (lines: string[]) => {
+  let i = 0;
+  while (!lines[i]?.trim().length) {
+    if (!lines[i]) break;
+    i++;
+  }
+  return i;
+};

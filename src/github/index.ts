@@ -1,14 +1,14 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
-import { FunctionsByFile } from "../lib/types";
-import { prepareFileUpdates } from "./utils";
+import { FileUpdates } from "../lib/types";
+import { getErrorMessage } from "../lib/errors";
 
 export const getInputFileExtensions = () =>
   core
     .getInput("file_extensions", { required: false })
-    ?.split(",")
+    .split(",")
     .map((ext) => ext.trim())
-    .filter((ext) => !!ext?.length && ext.match(/^\.\w+$/gm)) || [];
+    .filter((ext) => !!ext.length && ext.match(/^\.\w+$/gm));
 /**
  * Gets the list of changed TypeScript files in the current PR
  */
@@ -31,7 +31,7 @@ export const getChangedFilesInPR = async (
     pull_number: pullNumber,
   });
 
-  if (!response?.data?.length) return [];
+  if (!response.data.length) return [];
 
   // Filter for TypeScript files that were added or modified (not deleted)
   return response.data
@@ -49,39 +49,37 @@ export const getChangedFilesInPR = async (
 export const updatePRWithDocumentation = async (
   octokit: ReturnType<typeof github.getOctokit>,
   context: typeof github.context,
-  functionsByFile: FunctionsByFile[],
+  fileUpdates: FileUpdates[],
 ): Promise<{ processedFiles: number; updatedFiles: number }> => {
   const { owner, repo } = context.repo;
-
-  // Prepare file updates
-  const fileUpdates = await prepareFileUpdates(functionsByFile);
-
-  core.info(`Prepared updates for ${fileUpdates.length} files`);
 
   let updatedFilesCount = 0;
 
   // Process each file update
-  for (const fileUpdate of fileUpdates) {
+  for (const { path, content } of fileUpdates) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const ref = context.payload.pull_request?.head.ref as string | undefined;
+
       // Get the current file content and its SHA
-      const { data: fileData } = await octokit.rest.repos.getContent({
+      const { data } = await octokit.rest.repos.getContent({
         owner,
         repo,
-        path: fileUpdate.path,
-        ref: context.payload.pull_request?.head.ref,
+        path,
+        ref,
       });
 
-      if (Array.isArray(fileData) || fileData.type !== "file") {
-        core.warning(`${fileUpdate.path} is not a file, skipping`);
+      if (Array.isArray(data) || data.type !== "file") {
+        core.warning(`${path} is not a file, skipping`);
         continue;
       }
 
       // If the content hasn't changed, skip this file
-      const currentContent = Buffer.from(fileData.content, "base64").toString(
+      const currentContent = Buffer.from(data.content, "base64").toString(
         "utf8",
       );
-      if (currentContent === fileUpdate.content) {
-        core.info(`No changes needed for ${fileUpdate.path}, skipping`);
+      if (currentContent === content) {
+        core.info(`No changes needed for ${path}, skipping`);
         continue;
       }
 
@@ -90,17 +88,17 @@ export const updatePRWithDocumentation = async (
       await octokit.rest.repos.createOrUpdateFileContents({
         owner,
         repo,
-        path: fileUpdate.path,
-        message: `${prTitlePrefix}Add TsDoc comments to ${fileUpdate.path}`,
-        content: Buffer.from(fileUpdate.content).toString("base64"),
-        sha: fileData.sha,
-        branch: context.payload.pull_request?.head.ref,
+        path,
+        message: `${prTitlePrefix}Add TsDoc comments to ${path}`,
+        content: Buffer.from(content).toString("base64"),
+        sha: data.sha,
+        branch: ref,
       });
 
-      core.info(`Updated file ${fileUpdate.path} with documentation`);
+      core.info(`Updated file ${path} with documentation`);
       updatedFilesCount++;
     } catch (error) {
-      core.warning(`Error updating ${fileUpdate.path}: ${error}`);
+      core.warning(`Error updating ${path}: ${getErrorMessage(error)}`);
     }
   }
 

@@ -12,7 +12,7 @@ export const getFunctionParameters = (
       ? param.type.getText(sourceFile)
       : inferType(param, checker),
     optional: !!param.questionToken,
-    defaultValue: param.initializer?.getText(sourceFile) || undefined,
+    defaultValue: param.initializer?.getText(sourceFile) ?? undefined,
   }));
 };
 
@@ -26,7 +26,7 @@ export const getFunctionReturnType = (
   }
 
   // Try to infer return type from the signature
-  const signature = checker.getSignatureFromDeclaration(node as any);
+  const signature = checker.getSignatureFromDeclaration(node as never);
 
   return signature
     ? checker.typeToString(checker.getReturnTypeOfSignature(signature))
@@ -40,7 +40,7 @@ export const getFunctionDocumentation = (
   ts
     .getLeadingCommentRanges(sourceFile.text, node.getFullStart())
     ?.map((range) => sourceFile.text.substring(range.pos, range.end))
-    .join("\n") || "";
+    .join("\n") ?? "";
 
 // Helper to infer types when not explicitly specified
 export const inferType = (
@@ -50,7 +50,7 @@ export const inferType = (
   try {
     const type = checker.getTypeAtLocation(node);
     return checker.typeToString(type);
-  } catch (e) {
+  } catch {
     return "any";
   }
 };

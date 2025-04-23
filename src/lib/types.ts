@@ -26,11 +26,16 @@ export interface FunctionsByFile {
   functions: FunctionInfo[];
 }
 
+export interface FileUpdates {
+  path: string;
+  content: string;
+}
+
 export interface ClaudeResponse {
-  content: Array<{
+  content: {
     type: string;
     text: string;
-  }>;
+  }[];
 }
 
 export type TsNode =

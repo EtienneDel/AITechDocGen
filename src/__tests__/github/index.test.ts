@@ -3,10 +3,15 @@ import {
   getInputFileExtensions,
   updatePRWithDocumentation,
 } from "../../github";
-import { getMockOctokit, mockContext } from "./mock-data";
+import {
+  getMockOctokit,
+  mockContext,
+  mockFileContent,
+  mockModifiedFileContent,
+} from "./mock-data";
 import * as core from "@actions/core";
 import { Context } from "@actions/github/lib/context";
-import { FunctionInfo } from "../../lib/types";
+import { FileUpdates, FunctionsByFile } from "../../lib/types";
 
 jest.mock("@actions/core");
 
@@ -78,17 +83,73 @@ describe("github", () => {
   });
 
   it("should update the PR with documentation", async () => {
-    const mockOctokit = getMockOctokit({});
+    const mockOctokit = getMockOctokit();
 
-    const mockUpdatedFunctions: FunctionInfo[] = [];
-
-    const mockFunctionsByFile: Record<string, FunctionInfo[]> = {};
+    const mockFunctionsByFile: FileUpdates[] = [
+      {
+        path: "src/test/file.ts",
+        content: mockModifiedFileContent,
+      },
+    ];
 
     const updatedPR = await updatePRWithDocumentation(
       mockOctokit,
       mockContext,
-      mockUpdatedFunctions,
       mockFunctionsByFile,
     );
+
+    expect(updatedPR).toEqual({
+      processedFiles: 1,
+      updatedFiles: 1,
+    });
+
+    const sameFileContent: FileUpdates[] = [
+      {
+        path: "src/test/file.ts",
+        content: mockFileContent,
+      },
+    ];
+
+    const updatedPR2 = await updatePRWithDocumentation(
+      mockOctokit,
+      mockContext,
+      sameFileContent,
+    );
+
+    expect(updatedPR2).toEqual({
+      processedFiles: 1,
+      updatedFiles: 0,
+    });
+
+    const mockOctokit2 = getMockOctokit({
+      getContentMock: { data: { type: "Folder", content: "", sha: "" } },
+    });
+
+    const updatedPR3 = await updatePRWithDocumentation(
+      mockOctokit2,
+      mockContext,
+      mockFunctionsByFile,
+    );
+
+    expect(updatedPR3).toEqual({
+      processedFiles: 1,
+      updatedFiles: 0,
+    });
+
+    const mockOctokit3 = getMockOctokit({
+      createOrUpdateFileContentsMock: jest.fn().mockRejectedValue(false),
+    });
+
+    try {
+      await updatePRWithDocumentation(
+        mockOctokit3,
+        mockContext,
+        mockFunctionsByFile,
+      );
+
+      fail();
+    } catch (e) {
+      expect(e).toBeDefined();
+    }
   });
 });

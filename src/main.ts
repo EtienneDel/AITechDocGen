@@ -4,6 +4,7 @@ import { getChangedFilesInPR, updatePRWithDocumentation } from "./github";
 import { generateDocsForFunctionBatch } from "./claude";
 import { extractFunctions } from "./typescript";
 import { endTimer, startTimer } from "./lib/timer";
+import { prepareFileUpdates } from "./github/utils";
 
 async function run(): Promise<void> {
   try {
@@ -14,8 +15,9 @@ async function run(): Promise<void> {
 
     // Get changed files in the PR
     const changedFiles = await getChangedFilesInPR(octokit, github.context);
+    const numberChangedFiles = changedFiles.length;
 
-    if (changedFiles.length === 0) {
+    if (numberChangedFiles === 0) {
       core.notice("No TypeScript files were changed in this PR");
       core.setOutput("processed_files", "0");
       core.setOutput("updated_files", "0");
@@ -23,7 +25,7 @@ async function run(): Promise<void> {
     }
 
     core.info(
-      `Found ${changedFiles.length} TypeScript files to process: ${changedFiles.join(", ")}`,
+      `Found ${numberChangedFiles.toString()} TypeScript files to process: ${changedFiles.join(", ")}`,
     );
 
     // Extract functions from the changed files
@@ -31,7 +33,7 @@ async function run(): Promise<void> {
 
     if (functions.length === 0) {
       core.notice("No functions found in the changed files");
-      core.setOutput("processed_files", changedFiles.length.toString());
+      core.setOutput("processed_files", numberChangedFiles.toString());
       core.setOutput("updated_files", "0");
       return;
     }
@@ -42,18 +44,22 @@ async function run(): Promise<void> {
       claudeApiKey,
     );
 
+    const fileUpdates = prepareFileUpdates(functionsByFile);
+
     // Update PR with documentation
     const { processedFiles, updatedFiles } = await updatePRWithDocumentation(
       octokit,
       github.context,
-      functionsByFile,
+      fileUpdates,
     );
 
     // Set outputs
     core.setOutput("processed_files", processedFiles.toString());
     core.setOutput("updated_files", updatedFiles.toString());
 
-    core.info(`Successfully added documentation to ${updatedFiles} files`);
+    core.info(
+      `Successfully added documentation to ${updatedFiles.toString()} files`,
+    );
   } catch (error) {
     // Handle errors
     if (error instanceof Error) {
@@ -66,4 +72,6 @@ async function run(): Promise<void> {
   }
 }
 
-run();
+run()
+  .then(() => process.exit(0))
+  .catch(() => process.exit(1));

@@ -13,7 +13,7 @@ const processFunction = (
   checker: ts.TypeChecker,
   variableName?: string,
 ): FunctionInfo => ({
-  name: variableName || node.name?.getText(sourceFile) || "<anonymous>",
+  name: variableName ?? node.name?.getText(sourceFile) ?? "<anonymous>",
   filePath: sourceFile.fileName,
   startLine: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
     .line,
@@ -28,7 +28,7 @@ const processFunction = (
     node.modifiers?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword) ??
     false,
   isGenerator: !!node.asteriskToken,
-  body: node.body?.getText(sourceFile) || "",
+  body: node.body?.getText(sourceFile) ?? "",
 });
 
 // Helper function to visit nodes recursively
@@ -95,7 +95,7 @@ export function extractFunctions(fileNames: string[]): FunctionsByFile[] {
       continue;
     }
 
-    let functions: FunctionInfo[] = [];
+    const functions: FunctionInfo[] = [];
 
     // Visit each node in the source file
     ts.forEachChild(sourceFile, (node) => {
@@ -103,7 +103,7 @@ export function extractFunctions(fileNames: string[]): FunctionsByFile[] {
     });
 
     core.info(
-      `Extracted ${functions.length} functions from ${sourceFile.fileName}`,
+      `Extracted ${functions.length.toString()} functions from ${sourceFile.fileName}`,
     );
 
     functionsByFile.push({ filename: sourceFile.fileName, functions });

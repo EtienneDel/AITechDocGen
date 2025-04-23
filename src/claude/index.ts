@@ -1,18 +1,6 @@
 import { ClaudeResponse, FunctionsByFile } from "../lib/types";
 import { createPromptForFunctions } from "./prompt";
 
-// const responseText = `FUNCTION: signUp2
-// \`\`\`
-// /**
-//  * Description
-//  *
-//  * @param paramName Description of parameter
-//  * @returns Description of return value
-//  * @example
-//  * // Example code
-//  */
-// \`\`\``;
-
 /**
  * Generates documentation for a batch of functions using Claude API
  */
@@ -45,7 +33,7 @@ export const generateDocsForFunctionBatch = async (
 
   if (!response.ok) {
     throw new Error(
-      `Claude API error: ${response.status} ${response.statusText}`,
+      `Claude API error: ${response.status.toString()} ${response.statusText}`,
     );
   }
 
@@ -81,7 +69,7 @@ function extractTsDocsFromResponse(
       ...f,
       documentation:
         responses.find(({ functionName }) => functionName === f.name)
-          ?.tsDocComment || f.documentation,
+          ?.tsDocComment ?? f.documentation,
     })),
   }));
 }

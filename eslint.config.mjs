@@ -11,18 +11,16 @@ export default defineConfig([
   },
   {
     files: ["**/*.{js,mjs,cjs,ts}"],
-    languageOptions: { globals: globals.node },
+    languageOptions: { globals: { ...globals.node, ...globals.jest } },
   },
   {
-    overrides: [
-      {
-        files: ["__tests__/**/*"],
-        env: {
-          jest: true,
-        },
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
       },
-    ],
+    },
   },
-  tseslint.configs.strict,
-  tseslint.configs.stylistic,
+  tseslint.configs.strictTypeChecked,
+  tseslint.configs.stylisticTypeChecked,
 ]);
