@@ -25,6 +25,13 @@ export const prepareFileUpdates = (
           ? file.functions[index + 1]
           : undefined;
 
+      core.info(`###### ${index.toString()} ######`);
+      core.info(
+        previousFunction
+          ? JSON.stringify(previousFunction)
+          : "No previous function",
+      );
+
       // Format the documentation with proper indentation
       const indentation = getIndentation(lines[func.startLine]);
       const formattedDoc = formatDocumentation(func.documentation, indentation);
