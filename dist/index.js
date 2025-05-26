@@ -685,7 +685,13 @@ const generateTypeDocs = async () => {
                 // Ensure TypeDoc plugin is installed
                 await execAsync(`npx ${plugin} --version`).catch(() => {
                     core.info(`${plugin} not found, installing...`);
-                    return execAsync(`npm install --no-save ${plugin}`);
+                    return execAsync(`npm install --no-save ${plugin}`)
+                        .then(() => {
+                        core.info(`Successfully installed ${plugin}`);
+                    })
+                        .catch((err) => {
+                        core.error(`Failed installing ${plugin}: ${(0, errors_1.getErrorMessage)(err)}`);
+                    });
                 });
                 typeDocCommand += ` --plugin ${plugin}`;
             }

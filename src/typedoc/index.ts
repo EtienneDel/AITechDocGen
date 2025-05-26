@@ -58,7 +58,15 @@ export const generateTypeDocs = async (): Promise<void> => {
         // Ensure TypeDoc plugin is installed
         await execAsync(`npx ${plugin} --version`).catch(() => {
           core.info(`${plugin} not found, installing...`);
-          return execAsync(`npm install --no-save ${plugin}`);
+          return execAsync(`npm install --no-save ${plugin}`)
+            .then(() => {
+              core.info(`Successfully installed ${plugin}`);
+            })
+            .catch((err: unknown) => {
+              core.error(
+                `Failed installing ${plugin}: ${getErrorMessage(err)}`,
+              );
+            });
         });
 
         typeDocCommand += ` --plugin ${plugin}`;
