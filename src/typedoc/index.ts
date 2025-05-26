@@ -29,6 +29,8 @@ export const generateTypeDocs = async (): Promise<void> => {
       projectName,
     } = getInputs();
 
+    await execAsync(`npm install --no-save typedoc ${plugins.join(" ")}`);
+
     // Ensure TypeDoc and plugins are installed
     await execAsync("npx typedoc --version").catch(() => {
       core.info("TypeDoc not found, installing...");
