@@ -2,11 +2,11 @@ import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { FileUpdates } from "../lib/types";
 import { getErrorMessage } from "../lib/errors";
+import { getInputs } from "../getInputs";
 
 export const getInputFileExtensions = () =>
-  core
-    .getInput("file_extensions", { required: false })
-    .split(",")
+  getInputs()
+    .fileExtensions.split(",")
     .map((ext) => ext.trim())
     .filter((ext) => !!ext.length && ext.match(/^\.\w+$/gm));
 /**
@@ -84,12 +84,11 @@ export const updatePRWithDocumentation = async (
       }
 
       // Update the file with new content
-      const prTitlePrefix = core.getInput("pr_title_prefix") || "docs: ";
       await octokit.rest.repos.createOrUpdateFileContents({
         owner,
         repo,
         path,
-        message: `${prTitlePrefix}Add TsDoc comments to ${path}`,
+        message: `${getInputs().prTitlePrefix}Add TsDoc comments to ${path}`,
         content: Buffer.from(content).toString("base64"),
         sha: data.sha,
         branch: ref,

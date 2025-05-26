@@ -5,13 +5,15 @@ import { generateDocsForFunctionBatch } from "./claude";
 import { extractFunctions } from "./typescript";
 import { endTimer, startTimer } from "./lib/timer";
 import { prepareFileUpdates } from "./github/utils";
+import { collectDocumentationFiles, generateTypeDocs } from "./typedoc";
+import { getInputs } from "./getInputs";
+import { getErrorMessage } from "./lib/errors";
 
 async function run(): Promise<void> {
   try {
     startTimer("generateDocumentation");
-    const claudeApiKey = core.getInput("claude_api_key", { required: true });
-    const githubToken = core.getInput("github_token", { required: true });
-    const octokit = github.getOctokit(githubToken);
+
+    const octokit = github.getOctokit(getInputs().githubToken);
 
     // Get changed files in the PR
     const changedFiles = await getChangedFilesInPR(octokit, github.context);
@@ -41,16 +43,21 @@ async function run(): Promise<void> {
     // Generate documentation
     const functionsByFile = await generateDocsForFunctionBatch(
       functions,
-      claudeApiKey,
+      getInputs().claudeApiKey,
     );
 
+    // TsDoc comments
     const fileUpdates = prepareFileUpdates(functionsByFile);
+
+    await generateTypeDocs();
+
+    const docsFileUpdates = collectDocumentationFiles();
 
     // Update PR with documentation
     const { processedFiles, updatedFiles } = await updatePRWithDocumentation(
       octokit,
       github.context,
-      fileUpdates,
+      [...fileUpdates, ...docsFileUpdates],
     );
 
     // Set outputs
@@ -63,7 +70,7 @@ async function run(): Promise<void> {
   } catch (error) {
     // Handle errors
     if (error instanceof Error) {
-      core.setFailed(`Action failed with error: ${error.message}`);
+      core.setFailed(`Action failed with error: ${getErrorMessage(error)}`);
     } else {
       core.setFailed(`Action failed with unknown error`);
     }

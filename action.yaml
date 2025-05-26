@@ -18,6 +18,52 @@ inputs:
     description: 'Prefix for the commit message'
     required: false
     default: 'docs: '
+  # TypeDoc documentation generator inputs
+  docs-directory:
+    description: 'Directory where documentation will be generated'
+    required: false
+    default: 'docs'
+  entry-points:
+    description: 'Comma-separated list of entry point files for TypeDoc'
+    required: true
+  tsconfig:
+    description: 'Path to tsconfig.json file'
+    required: false
+    default: 'tsconfig.json'
+  plugins:
+    description: 'Comma-separated list of TypeDoc plugins to use'
+    required: false
+  theme:
+    description: 'TypeDoc theme to use'
+    required: false
+    default: 'default'
+  project-name:
+    description: 'Name of the project for documentation'
+    required: false
+  exclude-private:
+    description: 'Exclude private members from documentation'
+    required: false
+    default: 'false'
+  exclude-protected:
+    description: 'Exclude protected members from documentation'
+    required: false
+    default: 'false'
+  exclude-externals:
+    description: 'Exclude external modules from documentation'
+    required: false
+    default: 'false'
+  exclude-internal:
+    description: 'Exclude members marked as @internal from documentation'
+    required: false
+    default: 'false'
+  readme:
+    description: 'Path to README file to include in documentation'
+    required: false
+    default: 'README.md'
+  separate-commits:
+    description: 'Create separate commits for TSDoc comments and documentation'
+    required: false
+    default: 'false'
 outputs:
   processed_files:
     description: 'Number of files processed'

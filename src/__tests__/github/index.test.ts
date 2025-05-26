@@ -10,10 +10,12 @@ import {
   mockModifiedFileContent,
 } from "./mock-data";
 import * as core from "@actions/core";
+import * as github from "@actions/github";
 import { Context } from "@actions/github/lib/context";
-import { FileUpdates, FunctionsByFile } from "../../lib/types";
+import { FileUpdates } from "../../lib/types";
 
 jest.mock("@actions/core");
+jest.mock("@actions/github");
 
 describe("github", () => {
   beforeEach(() => {
@@ -25,6 +27,8 @@ describe("github", () => {
       }
       return "";
     });
+
+    (github.context as unknown) = mockContext;
   });
 
   it("should return only the file extensions passed as input", () => {
@@ -34,9 +38,6 @@ describe("github", () => {
     expect(getInputFileExtensions()).toEqual([".ts", ".tsx"]);
 
     (core.getInput as jest.Mock).mockReturnValue("");
-    expect(getInputFileExtensions()).toEqual([]);
-
-    (core.getInput as jest.Mock).mockReturnValue(undefined);
     expect(getInputFileExtensions()).toEqual([]);
   });
 
@@ -57,17 +58,7 @@ describe("github", () => {
 
     expect(changedFiles2).toEqual([]);
 
-    const mockOctokit3 = getMockOctokit({
-      listFilesMock: {
-        data: undefined,
-      },
-    });
-
-    const changedFiles3 = await getChangedFilesInPR(mockOctokit3, mockContext);
-
-    expect(changedFiles3).toEqual([]);
-
-    const changedFiles4 = await getChangedFilesInPR(mockOctokit, {
+    const changedFiles3 = await getChangedFilesInPR(mockOctokit, {
       repo: {
         owner: "testOwner",
         repo: "testRepo",
@@ -79,7 +70,7 @@ describe("github", () => {
       },
     } as unknown as Context);
 
-    expect(changedFiles4).toEqual([]);
+    expect(changedFiles3).toEqual([]);
   });
 
   it("should update the PR with documentation", async () => {

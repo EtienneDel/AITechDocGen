@@ -1,6 +1,8 @@
 import { Context } from "@actions/github/lib/context";
 import * as github from "@actions/github";
 import { FunctionInfo } from "../../lib/types";
+import * as core from "@actions/core";
+import { Inputs } from "../../getInputs";
 
 interface GetMockOctokitOptions {
   listFilesMock?: { data: { filename: string; status: string }[] | undefined };
@@ -19,7 +21,7 @@ export const getMockOctokit = ({
     rest: {
       pulls: {
         listFiles: jest.fn().mockResolvedValue(
-          listFilesMock || {
+          listFilesMock ?? {
             data: [
               { filename: "file1.ts", status: "added" },
               { filename: "file2.ts", status: "modified" },
@@ -30,7 +32,7 @@ export const getMockOctokit = ({
       },
       repos: {
         getContent: jest.fn().mockResolvedValue(
-          getContentMock || {
+          getContentMock ?? {
             data: {
               type: "file",
               content: Buffer.from(mockFileContent).toString("base64"),
@@ -39,10 +41,29 @@ export const getMockOctokit = ({
           },
         ),
         createOrUpdateFileContents:
-          createOrUpdateFileContentsMock || jest.fn().mockResolvedValue(true),
+          createOrUpdateFileContentsMock ?? jest.fn().mockResolvedValue(true),
       },
     },
   }) as unknown as ReturnType<typeof github.getOctokit>;
+
+export const mockGetInputs = (): Inputs => ({
+  claudeApiKey: "1234567890",
+  githubToken: "azertyuiop",
+  fileExtensions: ".ts,.tsx",
+  prTitlePrefix: "docs: ",
+  docsDirectory: "docs",
+  entryPoints: ["src/**.*.ts"],
+  tsconfig: "tsconfig.json",
+  plugins: [],
+  theme: "default",
+  projectName: "test-project",
+  excludePrivate: false,
+  excludeProtected: false,
+  excludeExternals: false,
+  excludeInternal: false,
+  readme: "README.md",
+  separateCommits: false,
+});
 
 export const mockContext = {
   repo: {
