@@ -29,14 +29,9 @@ export const generateTypeDocs = async (): Promise<void> => {
       projectName,
     } = getInputs();
 
-    await execAsync(`npm install --no-save typedoc ${plugins.join(" ")}`);
-
     // Ensure TypeDoc and plugins are installed
-    await execAsync("npx typedoc --version").catch(() => {
-      core.info("TypeDoc not found, installing...");
-      core.info(`Found plugins: ${plugins.join(" ")}, installing...`);
-      return execAsync(`npm install --no-save typedoc ${plugins.join(" ")}`);
-    });
+    core.info(`Installing Typedoc and plugins (${plugins.join(" ")})...`);
+    await execAsync(`npm install --no-save typedoc ${plugins.join(" ")}`);
 
     // Create output directory if it doesn't exist
     if (!fs.existsSync(docsDirectory)) {
@@ -69,7 +64,7 @@ export const generateTypeDocs = async (): Promise<void> => {
     if (excludeProtected) typeDocCommand += " --excludeProtected";
     if (excludeExternals) typeDocCommand += " --excludeExternals";
     if (excludeInternal) typeDocCommand += " --excludeInternal";
-    if (readme) typeDocCommand += ` --readme "${readme}"`;
+    // if (readme) typeDocCommand += ` --readme "${readme}"`;
     if (projectName) typeDocCommand += ` --name "${projectName}"`;
 
     core.info("Generating documentation with TypeDoc...");
