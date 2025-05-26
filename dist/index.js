@@ -681,9 +681,14 @@ const generateTypeDocs = async () => {
         typeDocCommand += ` --out "${docsDirectory}"`;
         // Add plugins if specified
         if (plugins.length > 0) {
-            plugins.forEach((plugin) => {
+            for (const plugin of plugins) {
+                // Ensure TypeDoc plugin is installed
+                await execAsync(`npx ${plugin} --version`).catch(() => {
+                    core.info(`${plugin} not found, installing...`);
+                    return execAsync(`npm install --no-save ${plugin}`);
+                });
                 typeDocCommand += ` --plugin ${plugin}`;
-            });
+            }
         }
         // Add other options
         if (theme)
