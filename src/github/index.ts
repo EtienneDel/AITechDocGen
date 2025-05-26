@@ -61,24 +61,35 @@ export const updatePRWithDocumentation = async (
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const ref = context.payload.pull_request?.head.ref as string | undefined;
 
-      // Get the current file content and its SHA
-      const { data } = await octokit.rest.repos.getContent({
-        owner,
-        repo,
-        path,
-        ref,
-      });
+      let needsCreation = false;
+      let existingSha = "";
+      let currentContent = "";
 
-      if (Array.isArray(data) || data.type !== "file") {
-        core.warning(`${path} is not a file, skipping`);
-        continue;
+      try {
+        // Get the current file content and its SHA
+        const { data } = await octokit.rest.repos.getContent({
+          owner,
+          repo,
+          path,
+          ref,
+        });
+
+        if (Array.isArray(data) || data.type !== "file") {
+          core.info(
+            `${path} is not a file or doesn't exist, will try to create it`,
+          );
+          needsCreation = true;
+        } else {
+          existingSha = data.sha;
+          currentContent = Buffer.from(data.content, "base64").toString("utf8");
+        }
+      } catch {
+        // If the file doesn't exist, we'll create it
+        core.info(`File ${path} doesn't exist, will create it`);
+        needsCreation = true;
       }
 
-      // If the content hasn't changed, skip this file
-      const currentContent = Buffer.from(data.content, "base64").toString(
-        "utf8",
-      );
-      if (currentContent === content) {
+      if (!needsCreation && currentContent === content) {
         core.info(`No changes needed for ${path}, skipping`);
         continue;
       }
@@ -90,7 +101,7 @@ export const updatePRWithDocumentation = async (
         path,
         message: `${getInputs().prTitlePrefix}Add TsDoc comments to ${path}`,
         content: Buffer.from(content).toString("base64"),
-        sha: data.sha,
+        sha: !needsCreation ? existingSha : undefined,
         branch: ref,
       });
 
