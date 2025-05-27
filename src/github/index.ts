@@ -52,44 +52,43 @@ const getFilesToCommit = async (
   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   const ref = context.payload.pull_request?.head.ref as string | undefined;
 
-  const treeEntries: GithubTreeEntry[] = [];
+  const treeEntries: (GithubTreeEntry | null)[] = await Promise.all(
+    fileUpdates.map(async ({ path, content }) => {
+      // Check if file exists and compare content
+      try {
+        const { data } = await octokit.rest.repos.getContent({
+          owner,
+          repo,
+          path,
+          ref,
+        });
 
-  // Process each file to determine what needs updating
-  for (const { path, content } of fileUpdates) {
-    // Check if file exists and compare content
-    try {
-      const { data } = await octokit.rest.repos.getContent({
-        owner,
-        repo,
-        path,
-        ref,
-      });
-
-      if (!Array.isArray(data) && data.type === "file") {
-        const currentContent = Buffer.from(data.content, "base64").toString(
-          "utf8",
-        );
-        if (currentContent === content) {
-          core.info(`No changes needed for ${path}, skipping`);
-          continue;
+        if (!Array.isArray(data) && data.type === "file") {
+          const currentContent = Buffer.from(data.content, "base64").toString(
+            "utf8",
+          );
+          if (currentContent === content) {
+            core.info(`No changes needed for ${path}, skipping`);
+            return null;
+          }
         }
+      } catch {
+        // File doesn't exist, we'll create it
+        core.info(`File ${path} doesn't exist, will create it`);
       }
-    } catch {
-      // File doesn't exist, we'll create it
-      core.info(`File ${path} doesn't exist, will create it`);
-    }
 
-    treeEntries.push({
-      path,
-      mode: "100644",
-      type: "blob",
-      content,
-    });
+      core.info(`Prepared ${path} for update`);
 
-    core.info(`Prepared ${path} for update`);
-  }
+      return {
+        path,
+        mode: "100644",
+        type: "blob",
+        content,
+      };
+    }),
+  );
 
-  return treeEntries;
+  return treeEntries.filter((entry) => entry !== null);
 };
 
 /**
