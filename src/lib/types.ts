@@ -38,6 +38,13 @@ export interface ClaudeResponse {
   }[];
 }
 
+export interface GithubTreeEntry {
+  path: string;
+  mode: "100644";
+  type: "blob";
+  content: string;
+}
+
 export type TsNode =
   | ts.FunctionDeclaration
   | ts.MethodDeclaration

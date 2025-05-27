@@ -1,6 +1,6 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
-import { FileUpdates } from "../lib/types";
+import { FileUpdates, GithubTreeEntry } from "../lib/types";
 import { getErrorMessage } from "../lib/errors";
 import { getInputs } from "../getInputs";
 
@@ -43,6 +43,55 @@ export const getChangedFilesInPR = async (
     .map((file) => file.filename);
 };
 
+const getFilesToCommit = async (
+  octokit: ReturnType<typeof github.getOctokit>,
+  context: typeof github.context,
+  fileUpdates: FileUpdates[],
+): Promise<GithubTreeEntry[]> => {
+  const { owner, repo } = context.repo;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  const ref = context.payload.pull_request?.head.ref as string | undefined;
+
+  const treeEntries: GithubTreeEntry[] = [];
+
+  // Process each file to determine what needs updating
+  for (const { path, content } of fileUpdates) {
+    // Check if file exists and compare content
+    try {
+      const { data } = await octokit.rest.repos.getContent({
+        owner,
+        repo,
+        path,
+        ref,
+      });
+
+      if (!Array.isArray(data) && data.type === "file") {
+        const currentContent = Buffer.from(data.content, "base64").toString(
+          "utf8",
+        );
+        if (currentContent === content) {
+          core.info(`No changes needed for ${path}, skipping`);
+          continue;
+        }
+      }
+    } catch {
+      // File doesn't exist, we'll create it
+      core.info(`File ${path} doesn't exist, will create it`);
+    }
+
+    treeEntries.push({
+      path,
+      mode: "100644",
+      type: "blob",
+      content,
+    });
+
+    core.info(`Prepared ${path} for update`);
+  }
+
+  return treeEntries;
+};
+
 /**
  * Updates documentation in a PR directly with a commit
  */
@@ -52,68 +101,80 @@ export const updatePRWithDocumentation = async (
   fileUpdates: FileUpdates[],
 ): Promise<{ processedFiles: number; updatedFiles: number }> => {
   const { owner, repo } = context.repo;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  const ref = context.payload.pull_request?.head.ref as string | undefined;
 
-  let updatedFilesCount = 0;
-
-  // Process each file update
-  for (const { path, content } of fileUpdates) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const ref = context.payload.pull_request?.head.ref as string | undefined;
-
-      let needsCreation = false;
-      let existingSha = "";
-      let currentContent = "";
-
-      try {
-        // Get the current file content and its SHA
-        const { data } = await octokit.rest.repos.getContent({
-          owner,
-          repo,
-          path,
-          ref,
-        });
-
-        if (Array.isArray(data) || data.type !== "file") {
-          core.info(
-            `${path} is not a file or doesn't exist, will try to create it`,
-          );
-          needsCreation = true;
-        } else {
-          existingSha = data.sha;
-          currentContent = Buffer.from(data.content, "base64").toString("utf8");
-        }
-      } catch {
-        // If the file doesn't exist, we'll create it
-        core.info(`File ${path} doesn't exist, will create it`);
-        needsCreation = true;
-      }
-
-      if (!needsCreation && currentContent === content) {
-        core.info(`No changes needed for ${path}, skipping`);
-        continue;
-      }
-
-      // Update the file with new content
-      await octokit.rest.repos.createOrUpdateFileContents({
-        owner,
-        repo,
-        path,
-        message: `${getInputs().prTitlePrefix}Add TsDoc comments to ${path}`,
-        content: Buffer.from(content).toString("base64"),
-        sha: !needsCreation ? existingSha : undefined,
-        branch: ref,
-      });
-
-      core.info(`Updated file ${path} with documentation`);
-      updatedFilesCount++;
-    } catch (error) {
-      core.warning(`Error updating ${path}: ${getErrorMessage(error)}`);
-    }
+  if (!ref) {
+    throw new Error("Could not determine PR branch reference");
   }
 
-  return {
-    processedFiles: fileUpdates.length,
-    updatedFiles: updatedFilesCount,
-  };
+  // Get the current commit SHA of the branch
+  const { data: refData } = await octokit.rest.git.getRef({
+    owner,
+    repo,
+    ref: `heads/${ref}`,
+  });
+
+  const currentCommitSha = refData.object.sha;
+
+  // Get the current commit to access its tree
+  const { data: currentCommit } = await octokit.rest.git.getCommit({
+    owner,
+    repo,
+    commit_sha: currentCommitSha,
+  });
+
+  const baseTreeSha = currentCommit.tree.sha;
+
+  const filesToCommit = await getFilesToCommit(octokit, context, fileUpdates);
+
+  // If no files need updating, return early
+  if (filesToCommit.length === 0) {
+    core.info("No files need updating");
+    return {
+      processedFiles: fileUpdates.length,
+      updatedFiles: 0,
+    };
+  }
+
+  try {
+    // Create a new tree with all the file updates
+    const { data: newTree } = await octokit.rest.git.createTree({
+      owner,
+      repo,
+      base_tree: baseTreeSha,
+      tree: filesToCommit,
+    });
+
+    // Create a new commit with the updated tree
+    const commitMessage = `${getInputs().prTitlePrefix}Add TsDoc comments to ${filesToCommit.length.toString()} file${filesToCommit.length > 1 ? "s" : ""}`;
+
+    const { data: newCommit } = await octokit.rest.git.createCommit({
+      owner,
+      repo,
+      message: commitMessage,
+      tree: newTree.sha,
+      parents: [currentCommitSha],
+    });
+
+    // Update the branch reference to point to the new commit
+    await octokit.rest.git.updateRef({
+      owner,
+      repo,
+      ref: `heads/${ref}`,
+      sha: newCommit.sha,
+    });
+
+    core.info(
+      `Created commit ${newCommit.sha} with ${filesToCommit.length.toString()} file updates`,
+    );
+
+    return {
+      processedFiles: fileUpdates.length,
+      updatedFiles: filesToCommit.length,
+    };
+  } catch (error) {
+    core.error(`Failed to create commit: ${getErrorMessage(error)}`);
+    throw error;
+  }
 };
